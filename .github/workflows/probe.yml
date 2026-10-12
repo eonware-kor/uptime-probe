@@ -1,0 +1,67 @@
+name: probe
+
+# 10분마다 공개 엔드포인트를 클러스터·AWS 밖(GitHub)에서 점검하고 결과를 healthchecks.io 로 보낸다.
+# 성공 → <ping>, 실패 → <ping>/fail (본문에 실패 목록) → healthchecks 가 즉시 DOWN 알림.
+# 이 워크플로 자체가 멈추면(예약 실행 중단 등) ping 이 끊겨 healthchecks 가 grace 이후 DOWN 을 보낸다.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check public endpoints
+        env:
+          HC_PING_URL: ${{ secrets.HC_PING_URL }}
+        run: |
+          set -u
+          # 이름|URL|기대 상태코드
+          # esmb API 는 Media Type Versioning 이라 Accept 헤더가 없으면 404 가 정상이다.
+          targets='
+          esmb-api|https://esmb.eonware.io/health|200
+          esmb-admin-api|https://admin.esmb.eonware.io/health|200
+          keycloak|https://auth.eonware.io/realms/master|200
+          web-ams|https://ams.eonware.io/|200
+          web-landing|https://eonware.io/|200
+          web-admin|https://admin.eonware.io/|200
+          '
+          failures=""
+          report=""
+          while IFS='|' read -r name url want; do
+            name=$(echo "$name" | xargs); [ -z "$name" ] && continue
+            code=000
+            for attempt in 1 2 3; do
+              code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' -H 'Accept: application/json;v=1' "$url" || echo 000)
+              [ "$code" = "$want" ] && break
+              sleep 10
+            done
+            line="$name $code (want $want) $url"
+            report="$report$line"$'\n'
+            echo "$line"
+            [ "$code" = "$want" ] || failures="$failures$line"$'\n'
+          done <<< "$targets"
+
+          if [ -z "${HC_PING_URL:-}" ]; then
+            echo "::warning::HC_PING_URL secret 미설정 — healthchecks.io 로 결과를 보내지 않는다"
+            [ -z "$failures" ] || exit 1
+            exit 0
+          fi
+
+          if [ -z "$failures" ]; then
+            curl -fsS -m 10 --retry 3 --data-raw "$report" "$HC_PING_URL" >/dev/null
+            echo "OK — success ping sent"
+          else
+            printf 'FAILED:\n%s\nALL:\n%s' "$failures" "$report" | curl -fsS -m 10 --retry 3 --data-binary @- "$HC_PING_URL/fail" >/dev/null
+            echo "::error::endpoint check failed"
+            printf '%s' "$failures"
+            exit 1
+          fi
