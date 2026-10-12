@@ -5,7 +5,9 @@ name: probe
 # 이 워크플로 자체가 멈추면(예약 실행 중단 등) ping 이 끊겨 healthchecks 가 grace 이후 DOWN 을 보낸다.
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    # GitHub 예약 실행은 best-effort 라 부하가 몰리는 정각(:00)·10분 단위에서 지연·누락이 잦다.
+    # 2026-10-12 생성 직후 */10 예약이 40분 넘게 한 번도 실행되지 않아 정각을 피한 분으로 바꿨다.
+    - cron: "4,14,24,34,44,54 * * * *"
   workflow_dispatch:
 
 permissions: {}

@@ -18,7 +18,7 @@ Eonware 공개 서비스를 **클러스터와 AWS 밖(GitHub Actions)** 에서 1
 
 ## 설정
 
-1. healthchecks.io 에서 체크를 만든다: 이름 `uptime-probe`, Period **10분**, Grace **20분**
+1. healthchecks.io 에서 체크를 만든다: 이름 `uptime-probe`, Period **10분**, Grace **60분**
 2. 체크의 ping URL 을 저장소 Secret `HC_PING_URL` 로 등록한다
    ```bash
    gh secret set HC_PING_URL -R eonware-kor/uptime-probe
@@ -31,6 +31,6 @@ Secret 이 없으면 점검만 하고 결과 전송은 건너뜁니다(경고 �
 
 - **공개 저장소라 Actions 가 무료·무제한**입니다. 비공개로 바꾸면 조직의 월 2,000분 무료 한도를 CI 와 나눠 쓰게 됩니다.
 - GitHub 은 **60일간 저장소 활동이 없으면 예약 실행을 자동으로 끕니다.** 꺼지면 healthchecks.io 가 ping 끊김으로 알려 주므로, 알림이 오면 Actions 탭에서 워크플로를 다시 켜면 됩니다.
-- GitHub 예약 실행은 부하가 높을 때 몇 분 늦을 수 있습니다. Grace 20분은 이를 감안한 값입니다.
+- GitHub 예약 실행은 best-effort 라 부하가 높을 때 수십 분 늦거나 빠질 수 있습니다(2026-10-12 생성 직후 40분 넘게 미실행 실측). 정각을 피한 분(:04, :14 …)으로 예약하고, healthchecks Grace 를 넉넉히(60분) 둡니다. 그래도 오탐이 잦으면 전용 무료 감시 서비스(UptimeRobot·cron-job.org)로 옮깁니다.
 
 관련: `eonware-kor/eonware-infra` 의 `docs/` · `scripts/node-hardening/`
