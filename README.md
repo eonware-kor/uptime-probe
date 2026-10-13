@@ -18,19 +18,24 @@ Eonware 공개 서비스를 **클러스터와 AWS 밖(GitHub Actions)** 에서 1
 
 ## 설정
 
-1. healthchecks.io 에서 체크를 만든다: 이름 `uptime-probe`, Period **10분**, Grace **60분**
-2. 체크의 ping URL 을 저장소 Secret `HC_PING_URL` 로 등록한다
-   ```bash
-   gh secret set HC_PING_URL -R eonware-kor/uptime-probe
-   ```
-3. Actions 탭에서 `probe` 를 수동 실행(`workflow_dispatch`)해 healthchecks 에 첫 ping 이 들어오는지 확인한다
+실행 트리거는 **cron-job.org**(무료 외부 cron)가 맡습니다. GitHub 예약 실행은 best-effort 라 신규 저장소에서 11시간에 1회만 실행된 실측(2026-10-12~13)이 있어 보조로만 둡니다.
 
-Secret 이 없으면 점검만 하고 결과 전송은 건너뜁니다(경고 표시).
+1. healthchecks.io 체크 `uptime-probe`: Period **10분**, Grace **60분**. ping URL 은 Secret `HC_PING_URL`
+2. GitHub **fine-grained PAT** — 이 저장소의 Actions 실행 권한만
+   - Resource owner `eonware-kor`, Repository access: **Only select repositories → `uptime-probe`**
+   - Repository permissions: **Actions = Read and write** (Metadata = Read 는 자동)
+3. cron-job.org 작업
+   - URL `https://api.github.com/repos/eonware-kor/uptime-probe/actions/workflows/probe.yml/dispatches`, Method **POST**
+   - Headers: `Authorization: Bearer <PAT>`, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, `Content-Type: application/json`
+   - Body `{"ref":"main"}`, 실행 주기 **10분**, 정상 응답 **204**
+   - 실패 알림(이메일) 켜기 — PAT 만료·폐기 시 여기서 먼저 알 수 있다
+
+PAT 가 만료되면 호출이 401 로 실패하고, cron-job.org 실패 메일과 healthchecks DOWN 메일이 함께 옵니다. 새 PAT 를 발급해 cron-job.org 헤더만 바꾸면 됩니다.
 
 ## ⚠️ 알아둘 것
 
 - **공개 저장소라 Actions 가 무료·무제한**입니다. 비공개로 바꾸면 조직의 월 2,000분 무료 한도를 CI 와 나눠 쓰게 됩니다.
 - GitHub 은 **60일간 저장소 활동이 없으면 예약 실행을 자동으로 끕니다.** 꺼지면 healthchecks.io 가 ping 끊김으로 알려 주므로, 알림이 오면 Actions 탭에서 워크플로를 다시 켜면 됩니다.
-- GitHub 예약 실행은 best-effort 라 부하가 높을 때 수십 분 늦거나 빠질 수 있습니다(2026-10-12 생성 직후 40분 넘게 미실행 실측). 정각을 피한 분(:04, :14 …)으로 예약하고, healthchecks Grace 를 넉넉히(60분) 둡니다. 그래도 오탐이 잦으면 전용 무료 감시 서비스(UptimeRobot·cron-job.org)로 옮깁니다.
+- PAT 는 이 저장소 하나의 Actions 권한만 갖도록 제한했습니다. 노출돼도 할 수 있는 일은 이 공개 워크플로를 실행하거나 취소하는 정도입니다.
 
 관련: `eonware-kor/eonware-infra` 의 `docs/` · `scripts/node-hardening/`

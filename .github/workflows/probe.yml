@@ -1,14 +1,16 @@
 name: probe
 
-# 10분마다 공개 엔드포인트를 클러스터·AWS 밖(GitHub)에서 점검하고 결과를 healthchecks.io 로 보낸다.
+# 공개 엔드포인트를 클러스터·AWS 밖(GitHub)에서 점검하고 결과를 healthchecks.io 로 보낸다.
 # 성공 → <ping>, 실패 → <ping>/fail (본문에 실패 목록) → healthchecks 가 즉시 DOWN 알림.
-# 이 워크플로 자체가 멈추면(예약 실행 중단 등) ping 이 끊겨 healthchecks 가 grace 이후 DOWN 을 보낸다.
+#
+# 실행 경로(2026-10-13~):
+#   주 경로 = cron-job.org 가 10분마다 GitHub API 로 workflow_dispatch 호출 (수 초 내 실행)
+#   보조 경로 = 아래 schedule (GitHub 예약 실행은 best-effort — 실측 11시간에 1회라 단독으로는 못 씀)
+# 어느 쪽이든 멈추면 ping 이 끊겨 healthchecks 가 grace(60분) 이후 DOWN 을 보낸다.
 on:
-  schedule:
-    # GitHub 예약 실행은 best-effort 라 부하가 몰리는 정각(:00)·10분 단위에서 지연·누락이 잦다.
-    # 2026-10-12 생성 직후 */10 예약이 40분 넘게 한 번도 실행되지 않아 정각을 피한 분으로 바꿨다.
-    - cron: "4,14,24,34,44,54 * * * *"
   workflow_dispatch:
+  schedule:
+    - cron: "4,14,24,34,44,54 * * * *"
 
 permissions: {}
 
